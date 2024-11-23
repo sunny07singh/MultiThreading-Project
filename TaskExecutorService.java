@@ -17,7 +17,7 @@ public class TaskExecutorService implements TaskExecutor {
     public TaskExecutorService(int maxThreads) {
         this.tasksQueue = new LinkedList<>();
         for(int i=0 ;i<maxThreads; i++){
-            WorkerThread workerThread = new WorkerThread(tasksQueue, this);
+            WorkerThread workerThread = new WorkerThread();
             workerThreadList.add(workerThread);
         }
         for(WorkerThread workerThread: workerThreadList){
@@ -47,15 +47,8 @@ public class TaskExecutorService implements TaskExecutor {
     }
 
     private class WorkerThread extends Thread{
-        private final Queue<Runnable> tasksQueue;
-        private final TaskExecutorService  taskExecutorService;
-        public WorkerThread(Queue<Runnable> tasksQueue, TaskExecutorService  taskExecutorService){
-            this.tasksQueue=tasksQueue;
-            this.taskExecutorService=taskExecutorService;
-        }
-
         public void run(){
-            while(!taskExecutorService.isShutdownTriggered()){
+            while(!isShutdownTriggered()){
                 Runnable task;
                 synchronized (lock) {
                     while (tasksQueue.isEmpty()) {
@@ -71,5 +64,4 @@ public class TaskExecutorService implements TaskExecutor {
             }
         }
     }
-
 }

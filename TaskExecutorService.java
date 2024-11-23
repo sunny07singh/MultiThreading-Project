@@ -12,6 +12,8 @@ public class TaskExecutorService implements TaskExecutor {
     private boolean shutdownTriggered = false;
     List<WorkerThread> workerThreadList = new ArrayList<>();
 
+    private final Object lock = new Object();
+
     public TaskExecutorService(int maxThreads) {
         this.tasksQueue = new LinkedList<>();
         for(int i=0 ;i<maxThreads; i++){
@@ -21,18 +23,17 @@ public class TaskExecutorService implements TaskExecutor {
         for(WorkerThread workerThread: workerThreadList){
             workerThread.start();
         }
-       // executeQueue();
     }
 
     @Override
     public <T> Future<T> submitTask(Task<T> task) {
-        FutureTask futureTask = new FutureTask<>(() ->
+        FutureTask<T> futureTask = new FutureTask<>(() ->
                 task.taskAction().call()
         );
-        Runnable runnableTask = ()-> futureTask.run();
-        synchronized (tasksQueue) {
+        Runnable runnableTask = futureTask::run;
+        synchronized (lock) {
             tasksQueue.add(runnableTask);
-            tasksQueue.notifyAll();
+            lock.notifyAll();
         }
         return futureTask;
     }
@@ -43,6 +44,32 @@ public class TaskExecutorService implements TaskExecutor {
 
     public boolean isShutdownTriggered(){
         return shutdownTriggered;
+    }
+
+    private class WorkerThread extends Thread{
+        private final Queue<Runnable> tasksQueue;
+        private final TaskExecutorService  taskExecutorService;
+        public WorkerThread(Queue<Runnable> tasksQueue, TaskExecutorService  taskExecutorService){
+            this.tasksQueue=tasksQueue;
+            this.taskExecutorService=taskExecutorService;
+        }
+
+        public void run(){
+            while(!taskExecutorService.isShutdownTriggered()){
+                Runnable task;
+                synchronized (lock) {
+                    while (tasksQueue.isEmpty()) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            System.out.println("Thread pool waiting for tasks");
+                        }
+                    }
+                    task = tasksQueue.poll();
+                }
+                task.run();
+            }
+        }
     }
 
 }
